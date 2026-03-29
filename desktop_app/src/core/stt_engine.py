@@ -11,12 +11,27 @@ class STTEngine:
         self.model = WhisperModel(model_size, device=device, compute_type=compute_type)
         print("Modelo cargado correctamente.")
 
-    def transcribe(self, audio_data: np.ndarray):
+    def transcribe(self, audio_data: np.ndarray, language="es"):
         """
-        Transcribe un chunk de audio a texto.
-        audio_data debe ser un array de numpy (float32, 16kHz).
+        Transcribe audio con precisión profesional.
+        Optimizado para ignorar ruido de fondo y evitar alucinaciones.
         """
-        segments, info = self.model.transcribe(audio_data, beam_size=5)
+        # Prompt mínimo y técnico para evitar que la IA lo repita por error
+        prompt = "Transcripción precisa."
+        
+        segments, info = self.model.transcribe(
+            audio_data, 
+            beam_size=5, # Reducido ligeramente para ganar velocidad sin perder precisión
+            language=language,
+            initial_prompt=prompt,
+            vad_filter=True,
+            vad_parameters=dict(
+                threshold=0.6, # Más agresivo: solo captura voz clara
+                min_speech_duration_ms=250,
+                min_silence_duration_ms=400 # Pausa más corta para ganar velocidad
+            )
+        )
+        
         text = "".join([segment.text for segment in segments])
         return text.strip(), info.language
 

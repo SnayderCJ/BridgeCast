@@ -27,10 +27,10 @@ class TTSEngine:
         self.model.to(self.device)
         print("Motor TTS listo.")
 
-    def generate_and_play(self, text, speaker="en_0"):
+    def generate_and_play(self, text, speaker="en_0", virtual_mic=False):
         """
         Genera audio a partir de texto y lo reproduce inmediatamente.
-        Para la PoC, lo reproduciremos en tus altavoces normales.
+        Si virtual_mic=True, envía el audio al micrófono virtual de PulseAudio.
         """
         if not text.strip():
             return
@@ -43,8 +43,17 @@ class TTSEngine:
         # Convertir a numpy para reproducir con sounddevice
         audio_numpy = audio.numpy()
         
-        # Reproducir (esto es temporal para la prueba)
-        sd.play(audio_numpy, self.sample_rate)
+        # Configurar salida
+        if virtual_mic:
+            os.environ["PULSE_SINK"] = "BridgeCastVirtualMic"
+            device_name = "pulse"
+        else:
+            if "PULSE_SINK" in os.environ:
+                del os.environ["PULSE_SINK"]
+            device_name = "pulse" # Usar pulse por defecto para evitar problemas con ALSA
+
+        # Reproducir
+        sd.play(audio_numpy, self.sample_rate, device=device_name)
         # No bloqueamos, permitimos que siga el proceso
         # sd.wait() # Si quisiéramos esperar a que termine de hablar
 

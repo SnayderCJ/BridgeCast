@@ -7,10 +7,10 @@ from stt_engine import STTEngine
 from translator import TranslatorEngine
 from tts_engine import TTSEngine
 
-# Configuración de audio
+# Configuración técnica avanzada
 SAMPLING_RATE = 16000
 CHANNELS = 1
-BLOCK_DURATION = 3
+BLOCK_DURATION = 0.3 # Bloques más pequeños para mayor agilidad
 BLOCK_SIZE = int(SAMPLING_RATE * BLOCK_DURATION)
 
 audio_queue = queue.Queue()
@@ -22,28 +22,28 @@ def audio_callback(indata, frames, time, status):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--device", type=int, help="ID del dispositivo de entrada", default=15)
+    parser.add_argument("--device", type=int, help="ID del dispositivo", default=15)
+    parser.add_argument("--virtual-mic", action="store_true", help="Usar micrófono virtual")
     args = parser.parse_args()
 
-    print("--- BridgeCast: Prueba de Concepto (STT + TRADUCCIÓN + TTS) ---")
+    print("--- BridgeCast Ultra: Nivel Profesional ---")
     
     try:
-        # Inicializar todos los motores
-        stt = STTEngine(model_size="tiny")
+        # Cargamos MEDIUM para el equilibrio perfecto entre precisión y velocidad
+        stt = STTEngine(model_size="medium") 
         translator = TranslatorEngine(source_lang="es", target_lang="en")
-        tts = TTSEngine(language="en") # Voz en inglés para la salida
+        tts = TTSEngine(language="en")
     except Exception as e:
-        print(f"Error cargando los modelos: {e}")
+        print(f"Error: {e}")
         return
 
-    try:
-        device_info = sd.query_devices(args.device, 'input')
-        print(f"\nCapturando desde: {device_info['name']} (ID: {args.device})")
-    except Exception as e:
-        print(f"Error al acceder al dispositivo {args.device}: {e}")
-        return
+    audio_buffer = []
+    silence_blocks = 0
+    # Umbrales afinados para ignorar ruido de fondo de reuniones
+    MIN_VOICE_RMS = 0.04 
+    SILENCE_LIMIT = 3 # Aprox 0.9 segundos de silencio para procesar
 
-    print("Habla algo en Español y espera la voz traducida (Presiona Ctrl+C para detener)...\n")
+    print("\n[LISTO] Escuchando con precisión de grado reunión...")
 
     try:
         with sd.InputStream(device=args.device,
@@ -55,27 +55,45 @@ def main():
                 audio_chunk = audio_queue.get()
                 audio_data = audio_chunk.flatten().astype(np.float32)
                 
-                # 1. Transcribir (STT)
-                text, lang = stt.transcribe(audio_data)
+                rms = np.sqrt(np.mean(audio_data**2))
                 
-                if text:
-                    # 2. Traducir (Traducción)
-                    translated_text = translator.translate(text)
-                    print(f"\n--- [Procesado] ---")
-                    print(f"[ES] Original:  {text}")
-                    print(f"[EN] Traducido: {translated_text}")
-                    
-                    # 3. Sintetizar y Reproducir (TTS)
-                    print(f"[Voz] Generando audio...")
-                    tts.generate_and_play(translated_text)
-                    print(f"------------------")
+                if rms > MIN_VOICE_RMS:
+                    # Voz activa: acumulamos
+                    audio_buffer.append(audio_data)
+                    silence_blocks = 0
+                    print("🎤", end="", flush=True)
                 else:
-                    pass
+                    # Silencio o ruido: comprobamos si hay frase pendiente
+                    if audio_buffer:
+                        silence_blocks += 1
+                        if silence_blocks >= SILENCE_LIMIT:
+                            print("\n[Procesando con alta fidelidad...]")
+                            
+                            full_audio = np.concatenate(audio_buffer)
+                            audio_buffer = [] 
+                            silence_blocks = 0
+                            
+                            text, _ = stt.transcribe(full_audio, language="es")
+                            
+                            if text and len(text) > 3:
+                                # Filtro básico para eliminar transcripciones de "ruido" que parecen texto
+                                if text.lower() in ["transcripción precisa.", "continuará", "gracias.", "bye."]:
+                                    print("[Ruido de fondo ignorado]")
+                                    continue
+                                    
+                                print(f"-> [ES] {text}")
+                                translated = translator.translate(text)
+                                print(f"-> [EN] {translated}")
+                                
+                                # Reproducción inmediata
+                                tts.generate_and_play(translated, virtual_mic=args.virtual_mic)
+                            else:
+                                print("[Ruido sutil descartado]")
 
     except KeyboardInterrupt:
-        print("\nPrueba finalizada por el usuario.")
+        print("\nMotor detenido.")
     except Exception as e:
-        print(f"\nOcurrió un error durante la ejecución: {e}")
+        print(f"\nError crítico: {e}")
 
 if __name__ == "__main__":
     main()
