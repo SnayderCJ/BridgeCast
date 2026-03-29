@@ -1,0 +1,6 @@
+faster-whisper
+PyAudio
+sounddevice
+numpy
+customtkinter
+torch
