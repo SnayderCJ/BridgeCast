@@ -4,3 +4,6 @@ sounddevice
 numpy
 customtkinter
 torch
+transformers
+sacremoses
+sentencepiece
